@@ -19,23 +19,24 @@ package me.ramidzkh.shaderc4j;
 public class Test {
 
     public static void main(String[] args) {
-        ShaderCompiler compiler = new ShaderCompiler();
-        compiler.addMacroDefinition("EP", "main");
-        compiler.setTargetEnvironment(TargetEnvironment.OPENGL, 450);
-        compiler.setSourceLanguage(SourceLanguage.GLSL);
-        compiler.setIncludeCallback((requestedSource, type, requestingSource, depth) -> {
-            if (requestedSource.equals("epic.glsl")) {
-                return new IncludeResult(requestedSource, "double epic;\n");
-            }
+        try (ShaderCompiler compiler = new ShaderCompiler()) {
+            compiler.addMacroDefinition("EP", "main");
+            compiler.setTargetEnvironment(TargetEnvironment.OPENGL, 450);
+            compiler.setSourceLanguage(SourceLanguage.GLSL);
+            compiler.setIncludeCallback((requestedSource, type, requestingSource, depth) -> {
+                if (requestedSource.equals("epic.glsl")) {
+                    return new IncludeResult(requestedSource, "double epic;\n");
+                }
 
-            return new IncludeResult(requestedSource, "");
-        });
+                return new IncludeResult(requestedSource, "");
+            });
 
-        CompilationArtifact artifact = compiler.compileIntoSpirvAssembly(
-        		"#version 450\n" +
-        		"#include <epic.glsl>\n" +
-                "\n" +
-                "void EP() {}", ShaderKind.VERTEX_SHADER, "shader.hlsl", "main");
-        System.out.println(artifact.getString());
+            CompilationArtifact artifact = compiler.compileIntoSpirvAssembly(
+                    "#version 450\n" +
+                    "#include <epic.glsl>\n" +
+                    "\n" +
+                    "void EP() {}", ShaderKind.VERTEX_SHADER, "shader.hlsl", "main");
+            System.out.println(artifact.getString());
+        }
     }
 }

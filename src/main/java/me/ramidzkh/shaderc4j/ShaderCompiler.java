@@ -16,10 +16,12 @@
 
 package me.ramidzkh.shaderc4j;
 
+import org.lwjgl.system.Callback;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.util.shaderc.ShadercIncludeResolveI;
 import org.lwjgl.util.shaderc.ShadercIncludeResult;
+import org.lwjgl.util.shaderc.ShadercIncludeResultReleaseI;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 
 import static org.lwjgl.util.shaderc.Shaderc.*;
@@ -27,10 +29,13 @@ import static org.lwjgl.util.shaderc.Shaderc.*;
 /**
  * The entrypoint into compiling a shader from source
  */
-public class ShaderCompiler implements Closeable {
+public class ShaderCompiler implements AutoCloseable {
 
     private long compiler;
     private long options;
+
+    private long resolve;
+    private long release;
 
     public ShaderCompiler() {
         compiler = shaderc_compiler_initialize();
@@ -51,22 +56,32 @@ public class ShaderCompiler implements Closeable {
     public void setIncludeCallback(IncludeCallback callback) {
         assertOpen();
 
-        shaderc_compile_options_set_include_callbacks(options,
-                (user_data, requested_source, type, requesting_source, include_depth) -> {
-                    IncludeResult result = callback.getResource(MemoryUtil.memUTF8Safe(requested_source), IncludeType.from(type), MemoryUtil.memUTF8Safe(requesting_source), include_depth);
-                    ShadercIncludeResult r = ShadercIncludeResult.calloc()
-                            .source_name(MemoryUtil.memUTF8Safe(result.getPath()))
-                            .content(MemoryUtil.memUTF8Safe(result.getContent()))
-                            .user_data(user_data);
-                    // TODO: Remove once this bug is fixed
-                    ShadercIncludeResult.ncontent_length(r.address(), r.content_length() - 1);
-                    return r.address();
-                },
-                (user_data, include_result) -> {
-                    ShadercIncludeResult.create(include_result).free();
-                },
-                // TODO: Make this MemoryUtil.NULL once a fixed version is released
-                1);
+        if (resolve != 0) {
+            Callback.free(resolve);
+        }
+
+        resolve = ((ShadercIncludeResolveI) (user_data, requested_source, type, requesting_source, include_depth) -> {
+            IncludeResult result = callback.getResource(MemoryUtil.memUTF8Safe(requested_source), IncludeType.from(type), MemoryUtil.memUTF8Safe(requesting_source), include_depth);
+            ShadercIncludeResult r = ShadercIncludeResult.calloc()
+                    .source_name(MemoryUtil.memUTF8Safe(result.getPath()))
+                    .content(MemoryUtil.memUTF8Safe(result.getContent()))
+                    .user_data(user_data);
+            // TODO: Remove once this bug is fixed
+            ShadercIncludeResult.ncontent_length(r.address(), r.content_length() - 1);
+            return r.address();
+        }).address();
+
+        if (release == 0) {
+            release = ((ShadercIncludeResultReleaseI) (user_data, include_result) -> {
+                ShadercIncludeResult r = ShadercIncludeResult.create(include_result);
+                MemoryUtil.memFree(r.source_name());
+                MemoryUtil.memFree(r.content());
+                r.free();
+            }).address();
+        }
+
+        // TODO: Make this MemoryUtil.NULL once a fixed version is released
+        nshaderc_compile_options_set_include_callbacks(options, resolve, release, 1);
     }
 
     public void addMacroDefinition(String name, String value) {
@@ -138,6 +153,14 @@ public class ShaderCompiler implements Closeable {
         if (options != MemoryUtil.NULL) {
             shaderc_compile_options_release(options);
             options = MemoryUtil.NULL;
+        }
+
+        if (resolve != 0) {
+            Callback.free(resolve);
+        }
+
+        if (release != 0) {
+            Callback.free(release);
         }
     }
 }
