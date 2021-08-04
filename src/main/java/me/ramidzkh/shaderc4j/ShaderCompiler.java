@@ -64,10 +64,8 @@ public class ShaderCompiler implements AutoCloseable {
             IncludeResult result = callback.getResource(MemoryUtil.memUTF8Safe(requested_source), IncludeType.from(type), MemoryUtil.memUTF8Safe(requesting_source), include_depth);
             ShadercIncludeResult r = ShadercIncludeResult.calloc()
                     .source_name(MemoryUtil.memUTF8Safe(result.getPath()))
-                    .content(MemoryUtil.memUTF8Safe(result.getContent()))
+                    .content(MemoryUtil.memUTF8(result.getContent(), false))
                     .user_data(user_data);
-            // TODO: Remove once this bug is fixed
-            ShadercIncludeResult.ncontent_length(r.address(), r.content_length() - 1);
             return r.address();
         }).address();
 
